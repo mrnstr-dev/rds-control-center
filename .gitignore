@@ -1,0 +1,13 @@
+﻿# Скомпилированные бинарники (собираются через build.ps1 или GitHub Actions)
+*.exe
+
+# Учетные данные DPAPI и выгрузки
+*cred*.xml
+*.clixml
+*.csv
+*.log
+
+# Системные файлы
+.vscode/
+.idea/
+Thumbs.db
