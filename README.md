@@ -41,7 +41,7 @@
 
 ## 🇬🇧 Features (EN)
 
-**RDS & FSLogix Control Center** is a universal, zero-hardcode Windows Forms administration utility featuring a custom GDI+ Dark UI (`dwmapi.dll`), designed to manage multi-broker **Windows Server RDS** environments and **Linux/Samba-backed FSLogix** profile containers from a single pane of glass.
+**RDS & FSLogix Control Center** is a universal, zero-hardcode Windows Forms administration utility designed to manage multi-broker **Windows Server RDS** environments and **Linux/Samba-backed FSLogix** profile containers from a single pane of glass.
 
 ### ⚡ Key Capabilities
 
