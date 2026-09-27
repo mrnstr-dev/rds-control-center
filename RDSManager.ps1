@@ -5,7 +5,7 @@ Add-Type -AssemblyName Microsoft.VisualBasic
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# --- C# КЛАССЫ: DWM DARK TITLEBAR, КАРТОЧКИ И КАСТОМНЫЙ ТЕМНЫЙ РЕНДЕРЕР МЕНЮ ---
+# --- C# КЛАССЫ ---
 $csharpUiHelpers = @"
 using System;
 using System.Drawing;
@@ -130,7 +130,7 @@ $clrAccentAmber = [System.Drawing.Color]::FromArgb(245, 158, 11)
 $clrAccentPurp  = [System.Drawing.Color]::FromArgb(168, 85, 247)
 $clrAccentRed   = [System.Drawing.Color]::FromArgb(239, 68, 68)
 
-# --- ХРАНИЛИЩЕ НАСТРОЕК (БЕЗ ХАРДКОДА ИМЕН ФЕРМ И СЕРВЕРОВ) ---
+# --- ХРАНИЛИЩЕ НАСТРОЕК ---
 $script:configDir    = Join-Path $env:APPDATA "RDSControlCenter"
 $script:settingsFile = Join-Path $script:configDir "settings.json"
 $script:credFile     = Join-Path $script:configDir "ssh_cred.xml"
