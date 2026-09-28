@@ -5,7 +5,7 @@ Add-Type -AssemblyName Microsoft.VisualBasic
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# --- C# КЛАССЫ ---
+# --- C# КЛАССЫ: DWM DARK TITLEBAR, КАРТОЧКИ И КАСТОМНЫЙ ТЕМНЫЙ РЕНДЕРЕР МЕНЮ ---
 $csharpUiHelpers = @"
 using System;
 using System.Drawing;
@@ -130,7 +130,7 @@ $clrAccentAmber = [System.Drawing.Color]::FromArgb(245, 158, 11)
 $clrAccentPurp  = [System.Drawing.Color]::FromArgb(168, 85, 247)
 $clrAccentRed   = [System.Drawing.Color]::FromArgb(239, 68, 68)
 
-# --- ХРАНИЛИЩЕ НАСТРОЕК ---
+# --- ХРАНИЛИЩЕ НАСТРОЕК (БЕЗ ХАРДКОДА ИМЕН ФЕРМ И СЕРВЕРОВ) ---
 $script:configDir    = Join-Path $env:APPDATA "RDSControlCenter"
 $script:settingsFile = Join-Path $script:configDir "settings.json"
 $script:credFile     = Join-Path $script:configDir "ssh_cred.xml"
@@ -168,6 +168,18 @@ function Save-AppSettings([string[]]$brokersList, [string]$fslHost) {
 
 Load-AppSettings
 
+# Определение NetBIOS-имени текущего домена для групп AD
+function Get-DefaultDomainPrefix {
+    if (-not [string]::IsNullOrWhiteSpace($env:USERDOMAIN) -and $env:USERDOMAIN -ne $env:COMPUTERNAME) {
+        return $env:USERDOMAIN
+    }
+    try {
+        return ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name.Split('.')[0].ToUpper())
+    } catch {
+        return $env:USERDOMAIN
+    }
+}
+
 # Кэш пользователей AD
 $script:adCache = @{}
 function Get-AdUserInfo([string]$login) {
@@ -198,8 +210,8 @@ function Get-AdUserInfo([string]$login) {
 # --- ГЛАВНОЕ ОКНО ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "RDS & FSLogix Control Center"
-$form.Size = New-Object System.Drawing.Size(1580, 840)
-$form.MinimumSize = New-Object System.Drawing.Size(1320, 640)
+$form.Size = New-Object System.Drawing.Size(1600, 850)
+$form.MinimumSize = New-Object System.Drawing.Size(1360, 650)
 $form.StartPosition = "CenterScreen"
 $form.BackColor = $clrBgMain
 $form.ForeColor = $clrTextPrimary
@@ -224,7 +236,7 @@ function New-ModernButton($text, $x, $y, $w, $h, $bgNorm, $bgHover) {
     $btn.FlatAppearance.MouseDownBackColor = $bgNorm
     $btn.BackColor = $bgNorm
     $btn.ForeColor = [System.Drawing.Color]::White
-    $btn.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.8, [System.Drawing.FontStyle]::Bold)
+    $btn.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.6, [System.Drawing.FontStyle]::Bold)
     $btn.Cursor = [System.Windows.Forms.Cursors]::Hand
     return $btn
 }
@@ -264,7 +276,7 @@ $fslDisp = if ($script:fslogixHost) { $script:fslogixHost } else { "Не зад�
 $cardTotal   = New-KpiCard "ВСЕГО СЕССИЙ"       "—"       "▸ Показать все сессии"            $clrAccentBlue
 $cardActive  = New-KpiCard "АКТИВНЫЕ СЕССИИ"    "—"       "● Работают сейчас (фильтр)"       $clrAccentGreen
 $cardDisc    = New-KpiCard "ОТКЛЮЧЕННЫЕ (IDLE)" "—"       "○ Ждут переподключения"           $clrAccentAmber
-$cardBrokers = New-KpiCard "УЗЛЫ И БРОКЕРЫ"     "—"       "◈ Управление узлами RDSH (Drain)" $clrAccentPurp
+$cardBrokers = New-KpiCard "УЗЛЫ И БРОКЕРЫ"     "—"       "◈ Узлы RDSH и Коллекции"          $clrAccentPurp
 $cardFslogix = New-KpiCard "FSLOGIX СЕРВЕР"     $fslDisp "⚡ Управление блокировками VHDX"   $clrAccentBlue
 
 $kpiGrid.Controls.Add($cardTotal,   0, 0)
@@ -280,18 +292,19 @@ $toolPanel.Dock = "Top"
 $toolPanel.Height = 94
 $toolPanel.BackColor = $clrBgSurface
 
-# Ряд 1: Кнопки управления
-$btnRefresh       = New-ModernButton "⟳ Обновить (F5)"            14   10 120 34 ([System.Drawing.Color]::FromArgb(37, 99, 235))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
-$btnShadowControl = New-ModernButton "▣ Управление (Без запроса)" 140  10 185 34 ([System.Drawing.Color]::FromArgb(5, 150, 105))  ([System.Drawing.Color]::FromArgb(16, 185, 129))
-$btnShadowView    = New-ModernButton "◉ Наблюдение (Без запроса)" 331  10 185 34 ([System.Drawing.Color]::FromArgb(13, 148, 136)) ([System.Drawing.Color]::FromArgb(20, 184, 166))
-$btnNodes         = New-ModernButton "◈ Узлы RDSH (Drain)"        522  10 155 34 ([System.Drawing.Color]::FromArgb(30, 64, 175))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
-$btnFSLogix       = New-ModernButton "⚡ Профили FSLogix"          683  10 150 34 ([System.Drawing.Color]::FromArgb(126, 34, 206)) ([System.Drawing.Color]::FromArgb(147, 51, 234))
-$btnProcesses     = New-ModernButton "⚙ Процессы"                 839  10 110 34 ([System.Drawing.Color]::FromArgb(67, 56, 202))  ([System.Drawing.Color]::FromArgb(99, 102, 241))
-$btnMsg           = New-ModernButton "✉ Сообщение"                955  10 110 34 ([System.Drawing.Color]::FromArgb(3, 105, 161))  ([System.Drawing.Color]::FromArgb(14, 165, 233))
-$btnDisconnect    = New-ModernButton "⏸ Отключить"                1071 10 105 34 ([System.Drawing.Color]::FromArgb(180, 83, 9))   ([System.Drawing.Color]::FromArgb(217, 119, 6))
-$btnLogoff        = New-ModernButton "✖ Сбросить"                 1182 10 105 34 ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
-$btnExport        = New-ModernButton "⤓ CSV"                      1293 10 75  34 ([System.Drawing.Color]::FromArgb(51, 65, 85))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
-$btnSettings      = New-ModernButton "⚙ Настройки"                1374 10 120 34 ([System.Drawing.Color]::FromArgb(30, 41, 59))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
+# Ряд 1: Кнопки управления (добавлена кнопка управления группами коллекций)
+$btnRefresh       = New-ModernButton "⟳ Обновить (F5)"         14   10 118 34 ([System.Drawing.Color]::FromArgb(37, 99, 235))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
+$btnShadowControl = New-ModernButton "▣ Управление (Тень)"     138  10 155 34 ([System.Drawing.Color]::FromArgb(5, 150, 105))  ([System.Drawing.Color]::FromArgb(16, 185, 129))
+$btnShadowView    = New-ModernButton "◉ Наблюдение (Тень)"     299  10 155 34 ([System.Drawing.Color]::FromArgb(13, 148, 136)) ([System.Drawing.Color]::FromArgb(20, 184, 166))
+$btnNodes         = New-ModernButton "◈ Узлы RDSH (Drain)"     460  10 150 34 ([System.Drawing.Color]::FromArgb(30, 64, 175))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
+$btnCollections   = New-ModernButton "★ Группы коллекций"      616  10 155 34 ([System.Drawing.Color]::FromArgb(109, 40, 217)) ([System.Drawing.Color]::FromArgb(139, 92, 246))
+$btnFSLogix       = New-ModernButton "⚡ Профили FSLogix"       777  10 145 34 ([System.Drawing.Color]::FromArgb(126, 34, 206)) ([System.Drawing.Color]::FromArgb(147, 51, 234))
+$btnProcesses     = New-ModernButton "⚙ Процессы"              928  10 105 34 ([System.Drawing.Color]::FromArgb(67, 56, 202))  ([System.Drawing.Color]::FromArgb(99, 102, 241))
+$btnMsg           = New-ModernButton "✉ Сообщение"             1039 10 105 34 ([System.Drawing.Color]::FromArgb(3, 105, 161))  ([System.Drawing.Color]::FromArgb(14, 165, 233))
+$btnDisconnect    = New-ModernButton "⏸ Отключить"             1150 10 102 34 ([System.Drawing.Color]::FromArgb(180, 83, 9))   ([System.Drawing.Color]::FromArgb(217, 119, 6))
+$btnLogoff        = New-ModernButton "✖ Сбросить"              1258 10 100 34 ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
+$btnExport        = New-ModernButton "⤓ CSV"                   1364 10 68  34 ([System.Drawing.Color]::FromArgb(51, 65, 85))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
+$btnSettings      = New-ModernButton "⚙ Настройки"             1438 10 112 34 ([System.Drawing.Color]::FromArgb(30, 41, 59))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
 
 # Ряд 2: Фильтры и поиск
 $lblBroker = New-Object System.Windows.Forms.Label
@@ -386,7 +399,7 @@ $lblHint.Location = New-Object System.Drawing.Point(1115, 58)
 $lblHint.AutoSize = $true
 
 $toolPanel.Controls.AddRange(@(
-    $btnRefresh, $btnShadowControl, $btnShadowView, $btnNodes, $btnFSLogix, $btnProcesses, $btnMsg, $btnDisconnect, $btnLogoff, $btnExport, $btnSettings,
+    $btnRefresh, $btnShadowControl, $btnShadowView, $btnNodes, $btnCollections, $btnFSLogix, $btnProcesses, $btnMsg, $btnDisconnect, $btnLogoff, $btnExport, $btnSettings,
     $lblBroker, $cbBrokers, $lblState, $cbState, $lblSearch, $searchBoxBorder, $chkAutoRefresh, $lblHint
 ))
 
@@ -455,6 +468,7 @@ $miShadowCtrl = $ctxMenu.Items.Add("▣  Теневой доступ: Управ
 $miShadowView = $ctxMenu.Items.Add("◉  Теневой доступ: Наблюдение (без запроса)")
 [void]$ctxMenu.Items.Add("-")
 $miNodesMgr   = $ctxMenu.Items.Add("◈  Управление узлами сеансов RDSH (Drain Mode)...")
+$miColGroups  = $ctxMenu.Items.Add("★  Группы доступа к коллекциям (User Groups)...")
 $miNodeAllow  = $ctxMenu.Items.Add("✔  Разрешить вход на этот сервер RDSH (Yes)")
 $miNodeDrain  = $ctxMenu.Items.Add("⏸  Запретить новые входы на этот сервер RDSH (Drain)")
 [void]$ctxMenu.Items.Add("-")
@@ -487,6 +501,459 @@ function Ensure-RDModule {
         Import-Module RemoteDesktop -ErrorAction SilentlyContinue
         $script:rdModuleLoaded = $true
     }
+}
+
+# --- ОКНО ПОИСКА И ВЫБОРА ГРУПП В ACTIVE DIRECTORY ---
+function Select-AdGroupsDialog([System.Windows.Forms.Form]$parentForm) {
+    $gForm = New-Object System.Windows.Forms.Form
+    $gForm.Text = "Поиск и выбор доменных групп в Active Directory"
+    $gForm.Size = New-Object System.Drawing.Size(760, 500)
+    $gForm.StartPosition = "CenterParent"
+    $gForm.BackColor = $clrBgMain
+    $gForm.ForeColor = $clrTextPrimary
+    $gForm.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+    $gForm.Add_HandleCreated({ [DarkUI]::UseImmersiveDarkMode($gForm.Handle) })
+
+    $gTop = New-Object System.Windows.Forms.Panel
+    $gTop.Dock = "Top"; $gTop.Height = 54
+    $gTop.BackColor = $clrBgSurface
+
+    $lblFilter = New-Object System.Windows.Forms.Label
+    $lblFilter.Text = "Имя или описание группы:"
+    $lblFilter.ForeColor = $clrTextMuted
+    $lblFilter.Location = New-Object System.Drawing.Point(14, 18); $lblFilter.AutoSize = $true
+
+    $txtFilter = New-Object System.Windows.Forms.TextBox
+    $txtFilter.BackColor = $clrBgCard; $txtFilter.ForeColor = $clrTextPrimary; $txtFilter.BorderStyle = "FixedSingle"
+    $txtFilter.Location = New-Object System.Drawing.Point(185, 14); $txtFilter.Size = New-Object System.Drawing.Size(260, 25)
+
+    $btnFindAd = New-ModernButton "🔍 Найти в AD" 455 10 140 32 ([System.Drawing.Color]::FromArgb(37, 99, 235)) ([System.Drawing.Color]::FromArgb(59, 130, 246))
+    $gTop.Controls.AddRange(@($lblFilter, $txtFilter, $btnFindAd))
+
+    $gBot = New-Object System.Windows.Forms.Panel
+    $gBot.Dock = "Bottom"; $gBot.Height = 50
+    $gBot.BackColor = $clrBgSurface
+
+    $btnSelectOk = New-ModernButton "✔ Добавить выбранные группы" 14  8 240 34 ([System.Drawing.Color]::FromArgb(5, 150, 105)) ([System.Drawing.Color]::FromArgb(16, 185, 129))
+    $btnSelectCn = New-ModernButton "Отмена"                       265 8 110 34 ([System.Drawing.Color]::FromArgb(51, 65, 85))  ([System.Drawing.Color]::FromArgb(71, 85, 105))
+    $lblGStat    = New-Object System.Windows.Forms.Label
+    $lblGStat.ForeColor = $clrAccentBlue
+    $lblGStat.Location = New-Object System.Drawing.Point(390, 16); $lblGStat.AutoSize = $true
+    $gBot.Controls.AddRange(@($btnSelectOk, $btnSelectCn, $lblGStat))
+
+    $gGrid = New-Object System.Windows.Forms.DataGridView
+    $gGrid.Dock = "Fill"; $gGrid.AutoSizeColumnsMode = "Fill"
+    $gGrid.SelectionMode = "FullRowSelect"; $gGrid.MultiSelect = $true
+    $gGrid.ReadOnly = $true; $gGrid.AllowUserToAddRows = $false; $gGrid.RowHeadersVisible = $false
+    $gGrid.BackgroundColor = $clrBgMain; $gGrid.BorderStyle = "None"
+    $gGrid.CellBorderStyle = "SingleHorizontal"; $gGrid.GridColor = $clrBgCard
+    $gGrid.EnableHeadersVisualStyles = $false; $gGrid.ColumnHeadersBorderStyle = "None"
+    $gGrid.ColumnHeadersHeight = 34
+    $gGrid.ColumnHeadersDefaultCellStyle.BackColor = $clrBgCard
+    $gGrid.ColumnHeadersDefaultCellStyle.ForeColor = $clrAccentBlue
+    $gGrid.DefaultCellStyle.BackColor = $clrBgSurface
+    $gGrid.DefaultCellStyle.ForeColor = $clrTextPrimary
+    $gGrid.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(30, 58, 138)
+    $gGrid.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::White
+    $gGrid.RowTemplate.Height = 28
+
+    $gForm.Controls.AddRange(@($gGrid, $gTop, $gBot))
+    $script:selectedAdGroups = @()
+    $domPrefix = Get-DefaultDomainPrefix
+
+    $DoSearchAdGroups = {
+        $lblGStat.Text = "Поиск групп в Active Directory..."
+        $gForm.Refresh()
+        $q = $txtFilter.Text.Trim()
+        $ldapFilter = if ([string]::IsNullOrWhiteSpace($q)) {
+            "(objectCategory=group)"
+        } else {
+            "(&(objectCategory=group)(|(sAMAccountName=*$q*)(name=*$q*)(description=*$q*)))"
+        }
+
+        $dtG = New-Object System.Data.DataTable
+        [void]$dtG.Columns.Add("Группа (ДОМЕН\Имя)", [string])
+        [void]$dtG.Columns.Add("Описание (AD Description)", [string])
+
+        try {
+            $searcher = [adsisearcher]$ldapFilter
+            [void]$searcher.PropertiesToLoad.AddRange(@("sAMAccountName", "description"))
+            $searcher.PageSize = 300
+            $results = $searcher.FindAll()
+            foreach ($r in $results) {
+                if ($r.Properties["sAMAccountName"].Count -gt 0) {
+                    $sam = [string]$r.Properties["sAMAccountName"][0]
+                    $desc = if ($r.Properties["description"].Count -gt 0) { [string]$r.Properties["description"][0] } else { "" }
+                    $fullGrp = if ($domPrefix) { "$domPrefix\$sam" } else { $sam }
+                    $row = $dtG.NewRow()
+                    $row["Группа (ДОМЕН\Имя)"]        = $fullGrp
+                    $row["Описание (AD Description)"] = $desc
+                    $dtG.Rows.Add($row)
+                }
+            }
+            $dtG.DefaultView.Sort = "[Группа (ДОМЕН\Имя)] ASC"
+            $gGrid.DataSource = $dtG.DefaultView
+            $lblGStat.Text = "Найдено групп: $($dtG.Rows.Count)"
+        } catch {
+            $lblGStat.Text = "Ошибка AD: $($_.Exception.Message)"
+        }
+    }
+
+    $btnFindAd.Add_Click($DoSearchAdGroups)
+    $txtFilter.Add_KeyDown({
+        param($s, $e)
+        if ($e.KeyCode -eq "Enter") { & $DoSearchAdGroups }
+    })
+
+    $btnSelectOk.Add_Click({
+        if ($gGrid.SelectedRows.Count -eq 0) {
+            [System.Windows.Forms.MessageBox]::Show("Выделите одну или несколько групп в таблице.", "Выбор групп", "OK", "Information")
+            return
+        }
+        foreach ($sr in $gGrid.SelectedRows) {
+            $script:selectedAdGroups += [string]$sr.Cells["Группа (ДОМЕН\Имя)"].Value
+        }
+        $gForm.DialogResult = "OK"
+        $gForm.Close()
+    })
+
+    $gGrid.Add_CellDoubleClick({
+        if ($gGrid.SelectedRows.Count -gt 0) {
+            $script:selectedAdGroups += [string]$gGrid.SelectedRows[0].Cells["Группа (ДОМЕН\Имя)"].Value
+            $gForm.DialogResult = "OK"
+            $gForm.Close()
+        }
+    })
+
+    $btnSelectCn.Add_Click({ $gForm.Close() })
+    $gForm.Add_Shown($DoSearchAdGroups)
+    [void]$gForm.ShowDialog($parentForm)
+    return $script:selectedAdGroups
+}
+
+# --- МОДУЛЬ УПРАВЛЕНИЯ ГРУППАМИ ДОСТУПА К КОЛЛЕКЦИЯМ (COLLECTION USER GROUPS) ---
+$ShowCollectionGroupsManager = {
+    if ($script:candidateBrokers.Count -eq 0) {
+        & $ShowSettingsDialog
+        return
+    }
+
+    $cgForm = New-Object System.Windows.Forms.Form
+    $cgForm.Text = "Управление доступом к коллекциям RDS — Доменные группы пользователей (User Groups)"
+    $cgForm.Size = New-Object System.Drawing.Size(1240, 620)
+    $cgForm.StartPosition = "CenterParent"
+    $cgForm.BackColor = $clrBgMain
+    $cgForm.ForeColor = $clrTextPrimary
+    $cgForm.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+    $cgForm.Add_HandleCreated({ [DarkUI]::UseImmersiveDarkMode($cgForm.Handle) })
+
+    # Верхняя панель
+    $cgTop = New-Object System.Windows.Forms.Panel
+    $cgTop.Dock = "Top"; $cgTop.Height = 56
+    $cgTop.BackColor = $clrBgSurface
+
+    $lblCgFarm = New-Object System.Windows.Forms.Label
+    $lblCgFarm.Text = "ФЕРМА:"
+    $lblCgFarm.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.5, [System.Drawing.FontStyle]::Bold)
+    $lblCgFarm.ForeColor = $clrTextMuted
+    $lblCgFarm.Location = New-Object System.Drawing.Point(16, 19); $lblCgFarm.AutoSize = $true
+
+    $cbCgFarm = New-Object System.Windows.Forms.ComboBox
+    $cbCgFarm.DropDownStyle = "DropDownList"; $cbCgFarm.FlatStyle = "Flat"
+    $cbCgFarm.BackColor = $clrBgCard; $cbCgFarm.ForeColor = $clrTextPrimary
+    $cbCgFarm.Location = New-Object System.Drawing.Point(75, 15); $cbCgFarm.Size = New-Object System.Drawing.Size(175, 26)
+    [void]$cbCgFarm.Items.Add("Все фермы")
+    foreach ($b in $script:candidateBrokers) { [void]$cbCgFarm.Items.Add($b.Split('.')[0]) }
+    $cbCgFarm.SelectedIndex = if ($cbBrokers.SelectedIndex -lt $cbCgFarm.Items.Count) { $cbBrokers.SelectedIndex } else { 0 }
+
+    $btnCgRefresh = New-ModernButton "⟳ Обновить коллекции" 265 11 175 34 ([System.Drawing.Color]::FromArgb(37, 99, 235)) ([System.Drawing.Color]::FromArgb(59, 130, 246))
+
+    $lblCgHint = New-Object System.Windows.Forms.Label
+    $lblCgHint.Text = "Выберите коллекцию слева, чтобы добавить или удалить разрешенные группы пользователей справа"
+    $lblCgHint.ForeColor = $clrTextMuted
+    $lblCgHint.Location = New-Object System.Drawing.Point(460, 19); $lblCgHint.AutoSize = $true
+
+    $cgTop.Controls.AddRange(@($lblCgFarm, $cbCgFarm, $btnCgRefresh, $lblCgHint))
+
+    # Нижний статус-бар
+    $cgStatusPanel = New-Object System.Windows.Forms.Panel
+    $cgStatusPanel.Dock = "Bottom"; $cgStatusPanel.Height = 32
+    $cgStatusPanel.BackColor = $clrBgSurface
+
+    $lblCgStatus = New-Object System.Windows.Forms.Label
+    $lblCgStatus.Text = "Загрузка коллекций..."
+    $lblCgStatus.ForeColor = $clrAccentBlue
+    $lblCgStatus.Location = New-Object System.Drawing.Point(16, 7); $lblCgStatus.AutoSize = $true
+    $cgStatusPanel.Controls.Add($lblCgStatus)
+
+    # Правая панель управления группами выбранной коллекции
+    $rightPanel = New-Object System.Windows.Forms.Panel
+    $rightPanel.Dock = "Right"; $rightPanel.Width = 460
+    $rightPanel.BackColor = $clrBgSurface
+    $rightPanel.Padding = New-Object System.Windows.Forms.Padding(14)
+
+    $lblSelColTitle = New-Object System.Windows.Forms.Label
+    $lblSelColTitle.Text = "ГРУППЫ ДОСТУПА ВЫБРАННОЙ КОЛЛЕКЦИИ:"
+    $lblSelColTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5, [System.Drawing.FontStyle]::Bold)
+    $lblSelColTitle.ForeColor = $clrAccentBlue
+    $lblSelColTitle.Location = New-Object System.Drawing.Point(14, 12); $lblSelColTitle.AutoSize = $true
+
+    $lblSelColSub = New-Object System.Windows.Forms.Label
+    $lblSelColSub.Text = "Коллекция не выбрана"
+    $lblSelColSub.ForeColor = $clrTextMuted
+    $lblSelColSub.Location = New-Object System.Drawing.Point(14, 34); $lblSelColSub.AutoSize = $true
+
+    $lstGroups = New-Object System.Windows.Forms.ListBox
+    $lstGroups.BackColor = $clrBgInput
+    $lstGroups.ForeColor = $clrTextPrimary
+    $lstGroups.BorderStyle = "FixedSingle"
+    $lstGroups.Font = New-Object System.Drawing.Font("Consolas", 10)
+    $lstGroups.SelectionMode = "MultiExtended"
+    $lstGroups.Location = New-Object System.Drawing.Point(14, 60)
+    $lstGroups.Size = New-Object System.Drawing.Size(430, 260)
+
+    $btnAddFromAd  = New-ModernButton "🔍 Найти и добавить из AD..." 14  330 235 34 ([System.Drawing.Color]::FromArgb(109, 40, 217)) ([System.Drawing.Color]::FromArgb(139, 92, 246))
+    $btnRemoveGrp  = New-ModernButton "✖ Удалить выбранную"          259 330 185 34 ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
+
+    $lblManualGrp = New-Object System.Windows.Forms.Label
+    $lblManualGrp.Text = "Или введите группу вручную (ДОМЕН\Группа):"
+    $lblManualGrp.ForeColor = $clrTextMuted
+    $lblManualGrp.Location = New-Object System.Drawing.Point(14, 376); $lblManualGrp.AutoSize = $true
+
+    $txtManualGrp = New-Object System.Windows.Forms.TextBox
+    $txtManualGrp.BackColor = $clrBgCard; $txtManualGrp.ForeColor = $clrTextPrimary; $txtManualGrp.BorderStyle = "FixedSingle"
+    $txtManualGrp.Location = New-Object System.Drawing.Point(14, 398); $txtManualGrp.Size = New-Object System.Drawing.Size(295, 26)
+
+    $btnAddManual = New-ModernButton "+ Добавить" 319 395 125 30 ([System.Drawing.Color]::FromArgb(51, 65, 85)) ([System.Drawing.Color]::FromArgb(71, 85, 105))
+
+    $btnApplyGroups = New-ModernButton "✔ Сохранить права доступа на брокере" 14 440 430 38 ([System.Drawing.Color]::FromArgb(5, 150, 105)) ([System.Drawing.Color]::FromArgb(16, 185, 129))
+
+    $rightPanel.Controls.AddRange(@(
+        $lblSelColTitle, $lblSelColSub, $lstGroups,
+        $btnAddFromAd, $btnRemoveGrp,
+        $lblManualGrp, $txtManualGrp, $btnAddManual, $btnApplyGroups
+    ))
+
+    # Левая таблица коллекций
+    $cgGrid = New-Object System.Windows.Forms.DataGridView
+    $cgGrid.Dock = "Fill"; $cgGrid.AutoSizeColumnsMode = "Fill"
+    $cgGrid.SelectionMode = "FullRowSelect"; $cgGrid.MultiSelect = $false
+    $cgGrid.ReadOnly = $true; $cgGrid.AllowUserToAddRows = $false
+    $cgGrid.RowHeadersVisible = $false
+    $cgGrid.BackgroundColor = $clrBgMain; $cgGrid.BorderStyle = "None"
+    $cgGrid.CellBorderStyle = "SingleHorizontal"; $cgGrid.GridColor = $clrBgCard
+    $cgGrid.EnableHeadersVisualStyles = $false; $cgGrid.ColumnHeadersBorderStyle = "None"
+    $cgGrid.ColumnHeadersHeight = 38
+    $cgGrid.ColumnHeadersDefaultCellStyle.BackColor = $clrBgCard
+    $cgGrid.ColumnHeadersDefaultCellStyle.ForeColor = $clrAccentBlue
+    $cgGrid.ColumnHeadersDefaultCellStyle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.2, [System.Drawing.FontStyle]::Bold)
+    $cgGrid.DefaultCellStyle.BackColor = $clrBgSurface
+    $cgGrid.DefaultCellStyle.ForeColor = $clrTextPrimary
+    $cgGrid.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(30, 58, 138)
+    $cgGrid.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::White
+    $cgGrid.AlternatingRowsDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(19, 28, 49)
+    $cgGrid.RowTemplate.Height = 34
+
+    $cgForm.Controls.AddRange(@($cgGrid, $rightPanel, $cgTop, $cgStatusPanel))
+    $script:collectionsTable = $null
+
+    $FilterCollections = {
+        if (-not $script:collectionsTable) { return }
+        if ($cbCgFarm.SelectedIndex -gt 0) {
+            $selF = $cbCgFarm.SelectedItem.ToString()
+            $script:collectionsTable.DefaultView.RowFilter = "Ферма = '$selF'"
+        } else {
+            $script:collectionsTable.DefaultView.RowFilter = ""
+        }
+        $lblCgStatus.Text = "Найдено коллекций сеансов: $($script:collectionsTable.DefaultView.Count)"
+    }
+
+    $SyncRightPanelWithSelectedRow = {
+        $lstGroups.Items.Clear()
+        if ($cgGrid.SelectedRows.Count -eq 0) {
+            $lblSelColSub.Text = "Коллекция не выбрана"
+            return
+        }
+        $r    = $cgGrid.SelectedRows[0]
+        $farm = [string]$r.Cells["Ферма"].Value
+        $col  = [string]$r.Cells["Коллекция"].Value
+        $grps = [string]$r.Cells["Разрешенные группы (UserGroup)"].Value
+        $lblSelColSub.Text = "Ферма: $farm   •   Коллекция: $col"
+
+        if (-not [string]::IsNullOrWhiteSpace($grps)) {
+            foreach ($g in ($grps -split ";")) {
+                $trimmed = $g.Trim()
+                if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                    [void]$lstGroups.Items.Add($trimmed)
+                }
+            }
+        }
+    }
+
+    $LoadCollections = {
+        $lblCgStatus.Text = "Параллельный опрос коллекций и групп доступа на всех брокерах..."
+        $btnCgRefresh.Enabled = $false
+        $cgForm.Refresh()
+
+        $colWorker = {
+            param([string]$brokerHost)
+            $out = @()
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            try {
+                $ar = $tcp.BeginConnect($brokerHost, 135, $null, $null)
+                if (-not $ar.AsyncWaitHandle.WaitOne(400, $false)) { return $out }
+                $tcp.EndConnect($ar)
+            } catch { return $out }
+            finally { $tcp.Close() }
+
+            try {
+                Import-Module RemoteDesktop -ErrorAction Stop
+                $colls = @(Get-RDSessionCollection -ConnectionBroker $brokerHost -ErrorAction Stop)
+                foreach ($c in $colls) {
+                    $ugList = @()
+                    try {
+                        $cfg = Get-RDSessionCollectionConfiguration -CollectionName $c.CollectionName -UserGroup -ConnectionBroker $brokerHost -ErrorAction Stop
+                        if ($cfg -and $cfg.UserGroup) {
+                            $ugList = @($cfg.UserGroup)
+                        }
+                    } catch {}
+
+                    $hosts = @(Get-RDSessionHost -CollectionName $c.CollectionName -ConnectionBroker $brokerHost -ErrorAction SilentlyContinue)
+                    $hostNames = @($hosts | ForEach-Object { $_.SessionHost.Split('.')[0] }) -join ", "
+
+                    $out += [PSCustomObject]@{
+                        FarmShort  = $brokerHost.Split('.')[0]
+                        BrokerFQDN = $brokerHost
+                        Collection = [string]$c.CollectionName
+                        HostsStr   = $hostNames
+                        GroupsStr  = ($ugList -join "; ")
+                    }
+                }
+            } catch {}
+            return $out
+        }
+
+        $pool = [runspacefactory]::CreateRunspacePool(1, [Math]::Max(1, $script:candidateBrokers.Count))
+        $pool.Open()
+        $cJobs = @()
+        foreach ($b in $script:candidateBrokers) {
+            $ps = [powershell]::Create()
+            $ps.RunspacePool = $pool
+            [void]$ps.AddScript($colWorker).AddArgument($b)
+            $cJobs += [PSCustomObject]@{ PS = $ps; Handle = $ps.BeginInvoke() }
+        }
+
+        $dt = New-Object System.Data.DataTable
+        [void]$dt.Columns.Add("Ферма", [string])
+        [void]$dt.Columns.Add("Коллекция", [string])
+        [void]$dt.Columns.Add("Узлы RDSH", [string])
+        [void]$dt.Columns.Add("Разрешенные группы (UserGroup)", [string])
+        [void]$dt.Columns.Add("BrokerHost", [string])
+
+        foreach ($j in $cJobs) {
+            try {
+                $resItems = $j.PS.EndInvoke($j.Handle)
+                foreach ($it in $resItems) {
+                    if (-not $it) { continue }
+                    $r = $dt.NewRow()
+                    $r["Ферма"]                          = $it.FarmShort
+                    $r["Коллекция"]                      = $it.Collection
+                    $r["Узлы RDSH"]                      = $it.HostsStr
+                    $r["Разрешенные группы (UserGroup)"] = $it.GroupsStr
+                    $r["BrokerHost"]                     = $it.BrokerFQDN
+                    $dt.Rows.Add($r)
+                }
+            } catch {}
+            finally { $j.PS.Dispose() }
+        }
+        $pool.Close(); $pool.Dispose()
+
+        $dt.DefaultView.Sort = "Ферма ASC, Коллекция ASC"
+        $script:collectionsTable = $dt
+        $cgGrid.DataSource = $script:collectionsTable.DefaultView
+        if ($cgGrid.Columns.Contains("BrokerHost")) { $cgGrid.Columns["BrokerHost"].Visible = $false }
+        if ($cgGrid.Columns.Contains("Ферма")) { $cgGrid.Columns["Ферма"].FillWeight = 45 }
+        if ($cgGrid.Columns.Contains("Коллекция")) { $cgGrid.Columns["Коллекция"].FillWeight = 75 }
+        if ($cgGrid.Columns.Contains("Узлы RDSH")) { $cgGrid.Columns["Узлы RDSH"].FillWeight = 85 }
+        if ($cgGrid.Columns.Contains("Разрешенные группы (UserGroup)")) { $cgGrid.Columns["Разрешенные группы (UserGroup)"].FillWeight = 150 }
+
+        $btnCgRefresh.Enabled = $true
+        & $FilterCollections
+        & $SyncRightPanelWithSelectedRow
+    }
+
+    $cgGrid.Add_SelectionChanged($SyncRightPanelWithSelectedRow)
+    $cbCgFarm.Add_SelectedIndexChanged($FilterCollections)
+    $btnCgRefresh.Add_Click($LoadCollections)
+
+    # Поиск и добавление групп из AD
+    $btnAddFromAd.Add_Click({
+        if ($cgGrid.SelectedRows.Count -eq 0) {
+            [System.Windows.Forms.MessageBox]::Show("Сначала выберите коллекцию в таблице слева.", "Внимание", "OK", "Information")
+            return
+        }
+        $picked = Select-AdGroupsDialog $cgForm
+        if ($picked -and $picked.Count -gt 0) {
+            foreach ($g in $picked) {
+                if (-not [string]::IsNullOrWhiteSpace($g) -and (-not $lstGroups.Items.Contains($g))) {
+                    [void]$lstGroups.Items.Add($g)
+                }
+            }
+        }
+    })
+
+    # Добавление группы вручную
+    $btnAddManual.Add_Click({
+        $val = $txtManualGrp.Text.Trim()
+        if ([string]::IsNullOrWhiteSpace($val)) { return }
+        if ($val -notmatch "\\") {
+            $dp = Get-DefaultDomainPrefix
+            if ($dp) { $val = "$dp\$val" }
+        }
+        if (-not $lstGroups.Items.Contains($val)) {
+            [void]$lstGroups.Items.Add($val)
+        }
+        $txtManualGrp.Text = ""
+    })
+
+    # Удаление выбранных групп из списка
+    $btnRemoveGrp.Add_Click({
+        $selItems = @($lstGroups.SelectedItems)
+        foreach ($item in $selItems) {
+            $lstGroups.Items.Remove($item)
+        }
+    })
+
+    # Сохранение списка групп в конфигурацию коллекции на брокере
+    $btnApplyGroups.Add_Click({
+        if ($cgGrid.SelectedRows.Count -eq 0) { return }
+        $r      = $cgGrid.SelectedRows[0]
+        $col    = [string]$r.Cells["Коллекция"].Value
+        $broker = [string]$r.Cells["BrokerHost"].Value
+
+        $newGroups = [string[]]@($lstGroups.Items | ForEach-Object { [string]$_ })
+        if ($newGroups.Count -eq 0) {
+            [System.Windows.Forms.MessageBox]::Show("Список групп не может быть пустым! Добавьте хотя бы одну группу доступа.", "Ошибка", "OK", "Warning")
+            return
+        }
+
+        $confirm = "Применить новый список групп доступа ($($newGroups.Count) шт.) для коллекции '$col' на брокере $broker?`n`n" + ($newGroups -join "`n")
+        if ([System.Windows.Forms.MessageBox]::Show($confirm, "Сохранение групп доступа коллекции", "YesNo", "Question") -eq "Yes") {
+            try {
+                Ensure-RDModule
+                $lblCgStatus.Text = "Применение групп для коллекции '$col' на $broker..."
+                $cgForm.Refresh()
+                Set-RDSessionCollectionConfiguration -CollectionName $col -UserGroup $newGroups -ConnectionBroker $broker -ErrorAction Stop
+                [System.Windows.Forms.MessageBox]::Show("Группы доступа для коллекции '$col' успешно обновлены!", "Успешно", "OK", "Information")
+                & $LoadCollections
+            } catch {
+                [System.Windows.Forms.MessageBox]::Show("Ошибка при сохранении групп коллекции:`n$($_.Exception.Message)", "Ошибка Set-RDSessionCollectionConfiguration", "OK", "Error")
+            }
+        }
+    })
+
+    $cgForm.Add_Shown($LoadCollections)
+    [void]$cgForm.ShowDialog($form)
 }
 
 # --- ОКНО НАСТРОЕК ИНФРАСТРУКТУРЫ (СПИСОК ФЕРМ И СЕРВЕР FSLOGIX) ---
@@ -545,7 +1012,6 @@ $ShowSettingsDialog = {
     $btnSaveCfg   = New-ModernButton "✔ Сохранить и опросить фермы" 20  392 260 36 ([System.Drawing.Color]::FromArgb(5, 150, 105)) ([System.Drawing.Color]::FromArgb(16, 185, 129))
     $btnCancelCfg = New-ModernButton "Отмена"                       295 392 120 36 ([System.Drawing.Color]::FromArgb(51, 65, 85))  ([System.Drawing.Color]::FromArgb(71, 85, 105))
 
-    # Автопоиск брокеров в текущем домене AD
     $btnAdDiscover.Add_Click({
         try {
             $s = [adsisearcher]"(&(objectCategory=computer)(|(name=*RDCB*)(name=*RDS*)(name=*BROKER*)(servicePrincipalName=*TERMSRV*)))"
@@ -639,7 +1105,7 @@ $ShowNodesManager = {
 
     $nForm = New-Object System.Windows.Forms.Form
     $nForm.Text = "Управление узлами сеансов RDSH (Разрешение / Запрет новых подключений)"
-    $nForm.Size = New-Object System.Drawing.Size(1180, 600)
+    $nForm.Size = New-Object System.Drawing.Size(1240, 600)
     $nForm.StartPosition = "CenterParent"
     $nForm.BackColor = $clrBgMain
     $nForm.ForeColor = $clrTextPrimary
@@ -660,17 +1126,18 @@ $ShowNodesManager = {
     $cbNFarm.DropDownStyle = "DropDownList"
     $cbNFarm.FlatStyle = "Flat"
     $cbNFarm.BackColor = $clrBgCard; $cbNFarm.ForeColor = $clrTextPrimary
-    $cbNFarm.Location = New-Object System.Drawing.Point(75, 15); $cbNFarm.Size = New-Object System.Drawing.Size(165, 26)
+    $cbNFarm.Location = New-Object System.Drawing.Point(75, 15); $cbNFarm.Size = New-Object System.Drawing.Size(155, 26)
     [void]$cbNFarm.Items.Add("Все фермы")
     foreach ($b in $script:candidateBrokers) { [void]$cbNFarm.Items.Add($b.Split('.')[0]) }
     $cbNFarm.SelectedIndex = if ($cbBrokers.SelectedIndex -lt $cbNFarm.Items.Count) { $cbBrokers.SelectedIndex } else { 0 }
 
-    $btnNRefresh = New-ModernButton "⟳ Обновить узлы"                  255 12 150 34 ([System.Drawing.Color]::FromArgb(37, 99, 235))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
-    $btnNAllow   = New-ModernButton "✔ Разрешить вход (Yes)"           415 12 200 34 ([System.Drawing.Color]::FromArgb(5, 150, 105))  ([System.Drawing.Color]::FromArgb(16, 185, 129))
-    $btnNReboot  = New-ModernButton "⏸ Запретить до ребута (Drain)"    623 12 245 34 ([System.Drawing.Color]::FromArgb(180, 83, 9))   ([System.Drawing.Color]::FromArgb(217, 119, 6))
-    $btnNDeny    = New-ModernButton "✖ Полный запрет входа (No)"       876 12 235 34 ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
+    $btnNRefresh = New-ModernButton "⟳ Обновить узлы"               242 12 140 34 ([System.Drawing.Color]::FromArgb(37, 99, 235))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
+    $btnNAllow   = New-ModernButton "✔ Разрешить вход (Yes)"        390 12 185 34 ([System.Drawing.Color]::FromArgb(5, 150, 105))  ([System.Drawing.Color]::FromArgb(16, 185, 129))
+    $btnNReboot  = New-ModernButton "⏸ Запретить до ребута (Drain)" 583 12 225 34 ([System.Drawing.Color]::FromArgb(180, 83, 9))   ([System.Drawing.Color]::FromArgb(217, 119, 6))
+    $btnNDeny    = New-ModernButton "✖ Полный запрет (No)"          816 12 190 34 ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
+    $btnNColGrp  = New-ModernButton "★ Группы коллекций..."         1014 12 185 34 ([System.Drawing.Color]::FromArgb(109, 40, 217)) ([System.Drawing.Color]::FromArgb(139, 92, 246))
 
-    $nTop.Controls.AddRange(@($lblNFarm, $cbNFarm, $btnNRefresh, $btnNAllow, $btnNReboot, $btnNDeny))
+    $nTop.Controls.AddRange(@($lblNFarm, $cbNFarm, $btnNRefresh, $btnNAllow, $btnNReboot, $btnNDeny, $btnNColGrp))
 
     $nStatusPanel = New-Object System.Windows.Forms.Panel
     $nStatusPanel.Dock = "Bottom"; $nStatusPanel.Height = 32
@@ -949,6 +1416,7 @@ $ShowNodesManager = {
     $btnNAllow.Add_Click({ & $ApplyNodeStateChange "Yes" "Разрешены (Yes)" })
     $btnNReboot.Add_Click({ & $ApplyNodeStateChange "NotUntilReboot" "Запретить до перезагрузки (NotUntilReboot)" })
     $btnNDeny.Add_Click({ & $ApplyNodeStateChange "No" "Полный запрет (No)" })
+    $btnNColGrp.Add_Click($ShowCollectionGroupsManager)
 
     $nForm.Add_Shown($LoadNodes)
     [void]$nForm.ShowDialog($form)
@@ -1754,6 +2222,9 @@ $miShadowView.Add_Click({ Start-SilentShadow $false })
 $btnNodes.Add_Click($ShowNodesManager)
 $miNodesMgr.Add_Click($ShowNodesManager)
 
+$btnCollections.Add_Click($ShowCollectionGroupsManager)
+$miColGroups.Add_Click($ShowCollectionGroupsManager)
+
 $miNodeAllow.Add_Click({
     if ($grid.SelectedRows.Count -eq 0) { return }
     $r      = $grid.SelectedRows[0]
@@ -1898,7 +2369,6 @@ $form.Add_FormClosing({
     }
 })
 
-# При первом запуске (если список брокеров пуст) сразу открываем окно настроек инфраструктуры
 $form.Add_Shown({
     if ($script:candidateBrokers.Count -eq 0) {
         & $ShowSettingsDialog
