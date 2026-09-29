@@ -206,7 +206,7 @@ function Get-AdUserInfo([string]$login) {
     return $info
 }
 
-# --- ГЛАВНОЕ ОКНО ---
+# --- ГЛАВНОЕ ОКНО (С ВЕРСИЕЙ 4.2 В ЗАГОЛОВКЕ) ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "RDS & FSLogix Control Center v4.2"
 $form.Size = New-Object System.Drawing.Size(1620, 860)
@@ -1021,7 +1021,7 @@ $ShowSettingsDialog = {
     $btnClearList  = New-ModernButton "Очистить список"                              360 238 140 32 ([System.Drawing.Color]::FromArgb(51, 65, 85))  ([System.Drawing.Color]::FromArgb(71, 85, 105))
 
     $lblFTitle = New-Object System.Windows.Forms.Label
-    $lblFTitle.Text = "Сервер хранения контейнеров профилей FSLogix (Ubuntu / Samba SSH — IP или FQDN):"
+    $lblFTitle.Text = "Сервер хранения контейнеров профилей FSLogix (Samba SSH — IP или FQDN):"
     $lblFTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5, [System.Drawing.FontStyle]::Bold)
     $lblFTitle.ForeColor = $clrAccentBlue
     $lblFTitle.Location = New-Object System.Drawing.Point(20, 290); $lblFTitle.AutoSize = $true
@@ -1596,7 +1596,7 @@ function Get-FSLogixCredential([bool]$forcePrompt = $false) {
     return (Request-FSLogixCredentials)
 }
 
-function Invoke-UbuntuSsh([string]$targetHost, [string]$remoteBashCmd, [System.Management.Automation.PSCredential]$cred) {
+function Invoke-RemoteSsh([string]$targetHost, [string]$remoteBashCmd, [System.Management.Automation.PSCredential]$cred) {
     Import-Module Posh-SSH -ErrorAction Stop
     $sess = New-SSHSession -ComputerName $targetHost -Credential $cred -AcceptKey -ConnectionTimeout 10 -ErrorAction Stop
     try {
@@ -1624,7 +1624,7 @@ $ShowFSLogixManager = {
     }
 
     if ([string]::IsNullOrWhiteSpace($script:fslogixHost)) {
-        $inputHost = [Microsoft.VisualBasic.Interaction]::InputBox("Введите IP-адрес или FQDN сервера хранения профилей FSLogix (Linux / Samba SSH):", "Настройка сервера FSLogix", "")
+        $inputHost = [Microsoft.VisualBasic.Interaction]::InputBox("Введите IP-адрес или FQDN сервера хранения профилей FSLogix (Samba SSH):", "Настройка сервера FSLogix", "")
         if ([string]::IsNullOrWhiteSpace($inputHost)) { return }
         Save-AppSettings $script:candidateBrokers $inputHost
         $cardFslogix.ValueText = $script:fslogixHost
@@ -1737,7 +1737,7 @@ $ShowFSLogixManager = {
         $bashScript = $bashLines -join "`n"
 
         try {
-            $rawOut = Invoke-UbuntuSsh $curSrv $bashScript $cred
+            $rawOut = Invoke-RemoteSsh $curSrv $bashScript $cred
             $dt = New-Object System.Data.DataTable
             [void]$dt.Columns.Add("PID (smbd)", [string])
             [void]$dt.Columns.Add("Пользователь (по пути)", [string])
@@ -1827,7 +1827,7 @@ $ShowFSLogixManager = {
         if ([System.Windows.Forms.MessageBox]::Show($msg, "Подтверждение разблокировки FSLogix", "YesNo", "Warning") -eq "Yes") {
             try {
                 $killCmd = "kill -9 " + ($pidsToKill -join " ") + " 2>/dev/null; echo OK"
-                [void](Invoke-UbuntuSsh $curSrv $killCmd $cred)
+                [void](Invoke-RemoteSsh $curSrv $killCmd $cred)
                 [System.Windows.Forms.MessageBox]::Show("Блокировка успешно снята (PID: $($pidsToKill -join ', ')).`nПользователь может подключаться к RDS.", "Успешно", "OK", "Information")
                 & $LoadLocks
             } catch {
@@ -2387,7 +2387,7 @@ $grid.Add_CellDoubleClick({
     if ($e.RowIndex -ge 0) { Start-SilentShadow $true }
 })
 
-# --- ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ДЛЯ ВСЕХ КНОПОК ВЕРХНЕГО МЕНЮ ---
+# --- ГЛОБАЛЬНЫЕ ГОРЯЧИХ КЛАВИШИ ДЛЯ ВСЕХ КНОПОК ВЕРХНЕГО МЕНЮ ---
 $form.Add_KeyDown({
     param($sender, $e)
 
