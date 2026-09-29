@@ -130,7 +130,7 @@ $clrAccentAmber = [System.Drawing.Color]::FromArgb(245, 158, 11)
 $clrAccentPurp  = [System.Drawing.Color]::FromArgb(168, 85, 247)
 $clrAccentRed   = [System.Drawing.Color]::FromArgb(239, 68, 68)
 
-# --- ХРАНИЛИЩЕ НАСТРОЕК (БЕЗ ХАРДКОДА ИМЕН ФЕРМ И СЕРВЕРОВ) ---
+# --- ХРАНИЛИЩЕ НАСТРОЕК ---
 $script:configDir    = Join-Path $env:APPDATA "RDSControlCenter"
 $script:settingsFile = Join-Path $script:configDir "settings.json"
 $script:credFile     = Join-Path $script:configDir "ssh_cred.xml"
@@ -168,7 +168,6 @@ function Save-AppSettings([string[]]$brokersList, [string]$fslHost) {
 
 Load-AppSettings
 
-# Определение NetBIOS-имени текущего домена для групп AD
 function Get-DefaultDomainPrefix {
     if (-not [string]::IsNullOrWhiteSpace($env:USERDOMAIN) -and $env:USERDOMAIN -ne $env:COMPUTERNAME) {
         return $env:USERDOMAIN
@@ -209,8 +208,8 @@ function Get-AdUserInfo([string]$login) {
 
 # --- ГЛАВНОЕ ОКНО ---
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "RDS & FSLogix Control Center"
-$form.Size = New-Object System.Drawing.Size(1600, 850)
+$form.Text = "RDS & FSLogix Control Center v4.2"
+$form.Size = New-Object System.Drawing.Size(1620, 860)
 $form.MinimumSize = New-Object System.Drawing.Size(1360, 650)
 $form.StartPosition = "CenterScreen"
 $form.BackColor = $clrBgMain
@@ -224,6 +223,12 @@ try {
     if ($exeIcon) { $form.Icon = $exeIcon }
 } catch {}
 
+$toolTip = New-Object System.Windows.Forms.ToolTip
+$toolTip.AutoPopDelay = 8000
+$toolTip.InitialDelay = 300
+$toolTip.ReshowDelay  = 200
+$toolTip.ShowAlways   = $true
+
 function New-ModernButton($text, $x, $y, $w, $h, $bgNorm, $bgHover) {
     $btn = New-Object System.Windows.Forms.Button
     $btn.Text = $text
@@ -236,7 +241,7 @@ function New-ModernButton($text, $x, $y, $w, $h, $bgNorm, $bgHover) {
     $btn.FlatAppearance.MouseDownBackColor = $bgNorm
     $btn.BackColor = $bgNorm
     $btn.ForeColor = [System.Drawing.Color]::White
-    $btn.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.6, [System.Drawing.FontStyle]::Bold)
+    $btn.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.5, [System.Drawing.FontStyle]::Bold)
     $btn.Cursor = [System.Windows.Forms.Cursors]::Hand
     return $btn
 }
@@ -273,11 +278,11 @@ function New-KpiCard($title, $initVal, $subText, $accentColor) {
 
 $fslDisp = if ($script:fslogixHost) { $script:fslogixHost } else { "Не задан" }
 
-$cardTotal   = New-KpiCard "ВСЕГО СЕССИЙ"       "—"       "▸ Показать все сессии"            $clrAccentBlue
-$cardActive  = New-KpiCard "АКТИВНЫЕ СЕССИИ"    "—"       "● Работают сейчас (фильтр)"       $clrAccentGreen
-$cardDisc    = New-KpiCard "ОТКЛЮЧЕННЫЕ (IDLE)" "—"       "○ Ждут переподключения"           $clrAccentAmber
-$cardBrokers = New-KpiCard "УЗЛЫ И БРОКЕРЫ"     "—"       "◈ Узлы RDSH и Коллекции"          $clrAccentPurp
-$cardFslogix = New-KpiCard "FSLOGIX СЕРВЕР"     $fslDisp "⚡ Управление блокировками VHDX"   $clrAccentBlue
+$cardTotal   = New-KpiCard "ВСЕГО СЕССИЙ"       "—"       "▸ Показать все сессии"                 $clrAccentBlue
+$cardActive  = New-KpiCard "АКТИВНЫЕ СЕССИИ"    "—"       "● Работают сейчас (фильтр)"            $clrAccentGreen
+$cardDisc    = New-KpiCard "ОТКЛЮЧЕННЫЕ (IDLE)" "—"       "○ Ждут переподключения"                $clrAccentAmber
+$cardBrokers = New-KpiCard "УЗЛЫ И БРОКЕРЫ"     "—"       "◈ Узлы RDSH (F4) / Коллекции (F6)"     $clrAccentPurp
+$cardFslogix = New-KpiCard "FSLOGIX СЕРВЕР"     $fslDisp "⚡ Управление блокировками VHDX (F7)"   $clrAccentBlue
 
 $kpiGrid.Controls.Add($cardTotal,   0, 0)
 $kpiGrid.Controls.Add($cardActive,  1, 0)
@@ -289,29 +294,63 @@ $dashboardPanel.Controls.Add($kpiGrid)
 # --- ПАНЕЛЬ ДЕЙСТВИЙ И ФИЛЬТРОВ ---
 $toolPanel = New-Object System.Windows.Forms.Panel
 $toolPanel.Dock = "Top"
-$toolPanel.Height = 94
+$toolPanel.Height = 96
 $toolPanel.BackColor = $clrBgSurface
 
-# Ряд 1: Кнопки управления (добавлена кнопка управления группами коллекций)
-$btnRefresh       = New-ModernButton "⟳ Обновить (F5)"         14   10 118 34 ([System.Drawing.Color]::FromArgb(37, 99, 235))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
-$btnShadowControl = New-ModernButton "▣ Управление (Тень)"     138  10 155 34 ([System.Drawing.Color]::FromArgb(5, 150, 105))  ([System.Drawing.Color]::FromArgb(16, 185, 129))
-$btnShadowView    = New-ModernButton "◉ Наблюдение (Тень)"     299  10 155 34 ([System.Drawing.Color]::FromArgb(13, 148, 136)) ([System.Drawing.Color]::FromArgb(20, 184, 166))
-$btnNodes         = New-ModernButton "◈ Узлы RDSH (Drain)"     460  10 150 34 ([System.Drawing.Color]::FromArgb(30, 64, 175))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
-$btnCollections   = New-ModernButton "★ Группы коллекций"      616  10 155 34 ([System.Drawing.Color]::FromArgb(109, 40, 217)) ([System.Drawing.Color]::FromArgb(139, 92, 246))
-$btnFSLogix       = New-ModernButton "⚡ Профили FSLogix"       777  10 145 34 ([System.Drawing.Color]::FromArgb(126, 34, 206)) ([System.Drawing.Color]::FromArgb(147, 51, 234))
-$btnProcesses     = New-ModernButton "⚙ Процессы"              928  10 105 34 ([System.Drawing.Color]::FromArgb(67, 56, 202))  ([System.Drawing.Color]::FromArgb(99, 102, 241))
-$btnMsg           = New-ModernButton "✉ Сообщение"             1039 10 105 34 ([System.Drawing.Color]::FromArgb(3, 105, 161))  ([System.Drawing.Color]::FromArgb(14, 165, 233))
-$btnDisconnect    = New-ModernButton "⏸ Отключить"             1150 10 102 34 ([System.Drawing.Color]::FromArgb(180, 83, 9))   ([System.Drawing.Color]::FromArgb(217, 119, 6))
-$btnLogoff        = New-ModernButton "✖ Сбросить"              1258 10 100 34 ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
-$btnExport        = New-ModernButton "⤓ CSV"                   1364 10 68  34 ([System.Drawing.Color]::FromArgb(51, 65, 85))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
-$btnSettings      = New-ModernButton "⚙ Настройки"             1438 10 112 34 ([System.Drawing.Color]::FromArgb(30, 41, 59))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
+# Ряд 1: Адаптивная сетка из 12 кнопок с горячими клавишами
+$btnBarGrid = New-Object System.Windows.Forms.TableLayoutPanel
+$btnBarGrid.Dock = "Top"
+$btnBarGrid.Height = 46
+$btnBarGrid.Padding = New-Object System.Windows.Forms.Padding(10, 6, 10, 2)
+$btnBarGrid.ColumnCount = 12
+$btnBarGrid.RowCount = 1
+
+$colWeights = @(8.2, 9.5, 9.7, 8.8, 8.8, 7.9, 8.1, 8.4, 8.8, 8.1, 5.5, 8.2)
+foreach ($w in $colWeights) {
+    [void]$btnBarGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, $w)))
+}
+[void]$btnBarGrid.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+
+function New-BarButton($text, $tipText, $bgNorm, $bgHover) {
+    $btn = New-ModernButton $text 0 0 100 34 $bgNorm $bgHover
+    $btn.Dock = "Fill"
+    $btn.Margin = New-Object System.Windows.Forms.Padding(3, 2, 3, 2)
+    $toolTip.SetToolTip($btn, $tipText)
+    return $btn
+}
+
+$btnRefresh       = New-BarButton "⟳ Обновить (F5)"     "F5 — Параллельный опрос всех ферм RDS"                                   ([System.Drawing.Color]::FromArgb(37, 99, 235))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
+$btnShadowControl = New-BarButton "▣ Управление (F2)"   "F2 — Теневое подключение с управлением без запроса согласия"             ([System.Drawing.Color]::FromArgb(5, 150, 105))  ([System.Drawing.Color]::FromArgb(16, 185, 129))
+$btnShadowView    = New-BarButton "◉ Наблюдение (F3)"   "F3 — Теневое подключение в режиме просмотра без запроса"                 ([System.Drawing.Color]::FromArgb(13, 148, 136)) ([System.Drawing.Color]::FromArgb(20, 184, 166))
+$btnNodes         = New-BarButton "◈ Узлы RDSH (F4)"    "F4 — Управление узлами сеансов RDSH (разрешение/запрет входа Drain Mode)" ([System.Drawing.Color]::FromArgb(30, 64, 175))  ([System.Drawing.Color]::FromArgb(59, 130, 246))
+$btnCollections   = New-BarButton "★ Коллекции (F6)"    "F6 — Управление доменными группами доступа к коллекциям RDS"              ([System.Drawing.Color]::FromArgb(109, 40, 217)) ([System.Drawing.Color]::FromArgb(139, 92, 246))
+$btnFSLogix       = New-BarButton "⚡ FSLogix (F7)"      "F7 — Менеджер блокировок контейнеров VHDX на сервере FSLogix"            ([System.Drawing.Color]::FromArgb(126, 34, 206)) ([System.Drawing.Color]::FromArgb(147, 51, 234))
+$btnProcesses     = New-BarButton "⚙ Процессы (F8)"     "F8 — Диспетчер процессов выбранной пользовательской сессии"              ([System.Drawing.Color]::FromArgb(67, 56, 202))  ([System.Drawing.Color]::FromArgb(99, 102, 241))
+$btnMsg           = New-BarButton "✉ Сообщение (F9)"    "F9 — Отправить всплывающее сообщение выбранным пользователям"            ([System.Drawing.Color]::FromArgb(3, 105, 161))  ([System.Drawing.Color]::FromArgb(14, 165, 233))
+$btnDisconnect    = New-BarButton "⏸ Отключить (F10)"   "F10 — Отключить выбранные сессии с сохранением запущенных программ"      ([System.Drawing.Color]::FromArgb(180, 83, 9))   ([System.Drawing.Color]::FromArgb(217, 119, 6))
+$btnLogoff        = New-BarButton "✖ Сбросить (F11)"    "F11 — Принудительный сброс (Logoff) выбранных сессий"                    ([System.Drawing.Color]::FromArgb(185, 28, 28))  ([System.Drawing.Color]::FromArgb(239, 68, 68))
+$btnExport        = New-BarButton "⤓ CSV (^S)"          "Ctrl+S — Выгрузить текущую таблицу сессий в CSV (Excel)"                 ([System.Drawing.Color]::FromArgb(51, 65, 85))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
+$btnSettings      = New-BarButton "⚙ Настройки (F12)"   "F12 — Настройка списка брокеров RDS и сервера профилей FSLogix"           ([System.Drawing.Color]::FromArgb(30, 41, 59))   ([System.Drawing.Color]::FromArgb(71, 85, 105))
+
+$btnBarGrid.Controls.Add($btnRefresh,       0, 0)
+$btnBarGrid.Controls.Add($btnShadowControl, 1, 0)
+$btnBarGrid.Controls.Add($btnShadowView,    2, 0)
+$btnBarGrid.Controls.Add($btnNodes,         3, 0)
+$btnBarGrid.Controls.Add($btnCollections,   4, 0)
+$btnBarGrid.Controls.Add($btnFSLogix,       5, 0)
+$btnBarGrid.Controls.Add($btnProcesses,     6, 0)
+$btnBarGrid.Controls.Add($btnMsg,           7, 0)
+$btnBarGrid.Controls.Add($btnDisconnect,    8, 0)
+$btnBarGrid.Controls.Add($btnLogoff,        9, 0)
+$btnBarGrid.Controls.Add($btnExport,        10, 0)
+$btnBarGrid.Controls.Add($btnSettings,      11, 0)
 
 # Ряд 2: Фильтры и поиск
 $lblBroker = New-Object System.Windows.Forms.Label
 $lblBroker.Text = "ФЕРМА:"
 $lblBroker.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.5, [System.Drawing.FontStyle]::Bold)
 $lblBroker.ForeColor = $clrTextMuted
-$lblBroker.Location = New-Object System.Drawing.Point(14, 58)
+$lblBroker.Location = New-Object System.Drawing.Point(14, 60)
 $lblBroker.AutoSize = $true
 
 $cbBrokers = New-Object System.Windows.Forms.ComboBox
@@ -319,7 +358,7 @@ $cbBrokers.DropDownStyle = "DropDownList"
 $cbBrokers.FlatStyle = "Flat"
 $cbBrokers.BackColor = $clrBgCard
 $cbBrokers.ForeColor = $clrTextPrimary
-$cbBrokers.Location = New-Object System.Drawing.Point(70, 54)
+$cbBrokers.Location = New-Object System.Drawing.Point(70, 56)
 $cbBrokers.Size = New-Object System.Drawing.Size(210, 26)
 
 function Update-BrokerComboList {
@@ -336,7 +375,7 @@ $lblState = New-Object System.Windows.Forms.Label
 $lblState.Text = "СТАТУС:"
 $lblState.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.5, [System.Drawing.FontStyle]::Bold)
 $lblState.ForeColor = $clrTextMuted
-$lblState.Location = New-Object System.Drawing.Point(295, 58)
+$lblState.Location = New-Object System.Drawing.Point(295, 60)
 $lblState.AutoSize = $true
 
 $cbState = New-Object System.Windows.Forms.ComboBox
@@ -344,21 +383,21 @@ $cbState.DropDownStyle = "DropDownList"
 $cbState.FlatStyle = "Flat"
 $cbState.BackColor = $clrBgCard
 $cbState.ForeColor = $clrTextPrimary
-$cbState.Location = New-Object System.Drawing.Point(355, 54)
+$cbState.Location = New-Object System.Drawing.Point(355, 56)
 $cbState.Size = New-Object System.Drawing.Size(165, 26)
 [void]$cbState.Items.AddRange(@("Все сессии", "Только Активные", "Только Отключенные"))
 $cbState.SelectedIndex = 0
 
 $lblSearch = New-Object System.Windows.Forms.Label
-$lblSearch.Text = "ПОИСК:"
+$lblSearch.Text = "ПОИСК (Ctrl+F):"
 $lblSearch.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 8.5, [System.Drawing.FontStyle]::Bold)
 $lblSearch.ForeColor = $clrTextMuted
-$lblSearch.Location = New-Object System.Drawing.Point(535, 58)
+$lblSearch.Location = New-Object System.Drawing.Point(535, 60)
 $lblSearch.AutoSize = $true
 
 $searchBoxBorder = New-Object System.Windows.Forms.Panel
-$searchBoxBorder.Location = New-Object System.Drawing.Point(592, 53)
-$searchBoxBorder.Size = New-Object System.Drawing.Size(310, 27)
+$searchBoxBorder.Location = New-Object System.Drawing.Point(638, 55)
+$searchBoxBorder.Size = New-Object System.Drawing.Size(300, 27)
 $searchBoxBorder.BackColor = $clrAccentBlue
 $searchBoxBorder.Padding = New-Object System.Windows.Forms.Padding(1)
 
@@ -372,14 +411,14 @@ $txtSearch.BackColor = $clrBgInput
 $txtSearch.ForeColor = $clrTextPrimary
 $txtSearch.Font = New-Object System.Drawing.Font("Segoe UI", 9.5)
 $txtSearch.Location = New-Object System.Drawing.Point(8, 4)
-$txtSearch.Size = New-Object System.Drawing.Size(268, 20)
+$txtSearch.Size = New-Object System.Drawing.Size(258, 20)
 
 $btnClearSearch = New-Object System.Windows.Forms.Label
 $btnClearSearch.Text = "✕"
 $btnClearSearch.ForeColor = $clrTextMuted
 $btnClearSearch.BackColor = $clrBgInput
 $btnClearSearch.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnClearSearch.Location = New-Object System.Drawing.Point(284, 4)
+$btnClearSearch.Location = New-Object System.Drawing.Point(274, 4)
 $btnClearSearch.Size = New-Object System.Drawing.Size(20, 18)
 $btnClearSearch.Cursor = [System.Windows.Forms.Cursors]::Hand
 
@@ -389,17 +428,17 @@ $searchBoxBorder.Controls.Add($searchInner)
 $chkAutoRefresh = New-Object System.Windows.Forms.CheckBox
 $chkAutoRefresh.Text = "Автообновление (30 сек)"
 $chkAutoRefresh.ForeColor = $clrTextPrimary
-$chkAutoRefresh.Location = New-Object System.Drawing.Point(920, 56)
+$chkAutoRefresh.Location = New-Object System.Drawing.Point(955, 58)
 $chkAutoRefresh.AutoSize = $true
 
 $lblHint = New-Object System.Windows.Forms.Label
-$lblHint.Text = "★ Двойной клик по строке — мгновенный теневой вход"
+$lblHint.Text = "★ F2..F12 — горячие клавиши действий   |   Двойной клик — теневой вход"
 $lblHint.ForeColor = $clrTextMuted
-$lblHint.Location = New-Object System.Drawing.Point(1115, 58)
+$lblHint.Location = New-Object System.Drawing.Point(1145, 60)
 $lblHint.AutoSize = $true
 
 $toolPanel.Controls.AddRange(@(
-    $btnRefresh, $btnShadowControl, $btnShadowView, $btnNodes, $btnCollections, $btnFSLogix, $btnProcesses, $btnMsg, $btnDisconnect, $btnLogoff, $btnExport, $btnSettings,
+    $btnBarGrid,
     $lblBroker, $cbBrokers, $lblState, $cbState, $lblSearch, $searchBoxBorder, $chkAutoRefresh, $lblHint
 ))
 
@@ -460,27 +499,27 @@ if ($doubleBufferProp) { $doubleBufferProp.SetValue($grid, $true, $null) }
 
 $gridPanel.Controls.Add($grid)
 
-# --- КОНТЕКСТНОЕ МЕНЮ (ПКМ) ---
+# --- КОНТЕКСТНОЕ МЕНЮ (ПКМ) С ПОДПИСЯМИ ГОРЯЧИХ КЛАВИШ ---
 $ctxMenu = New-Object System.Windows.Forms.ContextMenuStrip
 $ctxMenu.Renderer = New-Object DarkMenuRenderer
 $ctxMenu.Font = New-Object System.Drawing.Font("Segoe UI", 9.5)
-$miShadowCtrl = $ctxMenu.Items.Add("▣  Теневой доступ: Управление (без запроса)")
-$miShadowView = $ctxMenu.Items.Add("◉  Теневой доступ: Наблюдение (без запроса)")
+$miShadowCtrl = $ctxMenu.Items.Add("▣  Теневой доступ: Управление (F2)")
+$miShadowView = $ctxMenu.Items.Add("◉  Теневой доступ: Наблюдение (F3)")
 [void]$ctxMenu.Items.Add("-")
-$miNodesMgr   = $ctxMenu.Items.Add("◈  Управление узлами сеансов RDSH (Drain Mode)...")
-$miColGroups  = $ctxMenu.Items.Add("★  Группы доступа к коллекциям (User Groups)...")
+$miNodesMgr   = $ctxMenu.Items.Add("◈  Управление узлами сеансов RDSH (F4)...")
+$miColGroups  = $ctxMenu.Items.Add("★  Группы доступа к коллекциям (F6)...")
 $miNodeAllow  = $ctxMenu.Items.Add("✔  Разрешить вход на этот сервер RDSH (Yes)")
 $miNodeDrain  = $ctxMenu.Items.Add("⏸  Запретить новые входы на этот сервер RDSH (Drain)")
 [void]$ctxMenu.Items.Add("-")
-$miFSLogix    = $ctxMenu.Items.Add("⚡  Разблокировать VHDX на сервере FSLogix...")
-$miProcesses  = $ctxMenu.Items.Add("⚙  Диспетчер процессов пользователя...")
-$miSendMsg    = $ctxMenu.Items.Add("✉  Отправить сообщение...")
+$miFSLogix    = $ctxMenu.Items.Add("⚡  Разблокировать VHDX на сервере FSLogix (F7)...")
+$miProcesses  = $ctxMenu.Items.Add("⚙  Диспетчер процессов пользователя (F8)...")
+$miSendMsg    = $ctxMenu.Items.Add("✉  Отправить сообщение (F9)...")
 [void]$ctxMenu.Items.Add("-")
 $miCopyUser   = $ctxMenu.Items.Add("◈  Скопировать логин и ФИО")
 $miOpenC      = $ctxMenu.Items.Add("▸  Открыть диск C`$ на сервере RDSH")
 [void]$ctxMenu.Items.Add("-")
-$miDisconnect = $ctxMenu.Items.Add("⏸  Отключить сеанс (Disconnect)")
-$miLogoff     = $ctxMenu.Items.Add("✖  Сбросить сеанс (Logoff)")
+$miDisconnect = $ctxMenu.Items.Add("⏸  Отключить сеанс — Disconnect (F10)")
+$miLogoff     = $ctxMenu.Items.Add("✖  Сбросить сеанс — Logoff (F11)")
 $grid.ContextMenuStrip = $ctxMenu
 
 $form.Controls.AddRange(@($gridPanel, $toolPanel, $dashboardPanel, $statusPanel))
@@ -631,7 +670,7 @@ function Select-AdGroupsDialog([System.Windows.Forms.Form]$parentForm) {
     return $script:selectedAdGroups
 }
 
-# --- МОДУЛЬ УПРАВЛЕНИЯ ГРУППАМИ ДОСТУПА К КОЛЛЕКЦИЯМ (COLLECTION USER GROUPS) ---
+# --- МОДУЛЬ УПРАВЛЕНИЯ ГРУППАМИ ДОСТУПА К КОЛЛЕКЦИЯМ (F6) ---
 $ShowCollectionGroupsManager = {
     if ($script:candidateBrokers.Count -eq 0) {
         & $ShowSettingsDialog
@@ -647,7 +686,6 @@ $ShowCollectionGroupsManager = {
     $cgForm.Font = New-Object System.Drawing.Font("Segoe UI", 9)
     $cgForm.Add_HandleCreated({ [DarkUI]::UseImmersiveDarkMode($cgForm.Handle) })
 
-    # Верхняя панель
     $cgTop = New-Object System.Windows.Forms.Panel
     $cgTop.Dock = "Top"; $cgTop.Height = 56
     $cgTop.BackColor = $clrBgSurface
@@ -675,7 +713,6 @@ $ShowCollectionGroupsManager = {
 
     $cgTop.Controls.AddRange(@($lblCgFarm, $cbCgFarm, $btnCgRefresh, $lblCgHint))
 
-    # Нижний статус-бар
     $cgStatusPanel = New-Object System.Windows.Forms.Panel
     $cgStatusPanel.Dock = "Bottom"; $cgStatusPanel.Height = 32
     $cgStatusPanel.BackColor = $clrBgSurface
@@ -686,7 +723,6 @@ $ShowCollectionGroupsManager = {
     $lblCgStatus.Location = New-Object System.Drawing.Point(16, 7); $lblCgStatus.AutoSize = $true
     $cgStatusPanel.Controls.Add($lblCgStatus)
 
-    # Правая панель управления группами выбранной коллекции
     $rightPanel = New-Object System.Windows.Forms.Panel
     $rightPanel.Dock = "Right"; $rightPanel.Width = 460
     $rightPanel.BackColor = $clrBgSurface
@@ -734,7 +770,6 @@ $ShowCollectionGroupsManager = {
         $lblManualGrp, $txtManualGrp, $btnAddManual, $btnApplyGroups
     ))
 
-    # Левая таблица коллекций
     $cgGrid = New-Object System.Windows.Forms.DataGridView
     $cgGrid.Dock = "Fill"; $cgGrid.AutoSizeColumnsMode = "Fill"
     $cgGrid.SelectionMode = "FullRowSelect"; $cgGrid.MultiSelect = $false
@@ -886,7 +921,6 @@ $ShowCollectionGroupsManager = {
     $cbCgFarm.Add_SelectedIndexChanged($FilterCollections)
     $btnCgRefresh.Add_Click($LoadCollections)
 
-    # Поиск и добавление групп из AD
     $btnAddFromAd.Add_Click({
         if ($cgGrid.SelectedRows.Count -eq 0) {
             [System.Windows.Forms.MessageBox]::Show("Сначала выберите коллекцию в таблице слева.", "Внимание", "OK", "Information")
@@ -902,7 +936,6 @@ $ShowCollectionGroupsManager = {
         }
     })
 
-    # Добавление группы вручную
     $btnAddManual.Add_Click({
         $val = $txtManualGrp.Text.Trim()
         if ([string]::IsNullOrWhiteSpace($val)) { return }
@@ -916,7 +949,6 @@ $ShowCollectionGroupsManager = {
         $txtManualGrp.Text = ""
     })
 
-    # Удаление выбранных групп из списка
     $btnRemoveGrp.Add_Click({
         $selItems = @($lstGroups.SelectedItems)
         foreach ($item in $selItems) {
@@ -924,7 +956,6 @@ $ShowCollectionGroupsManager = {
         }
     })
 
-    # Сохранение списка групп в конфигурацию коллекции на брокере
     $btnApplyGroups.Add_Click({
         if ($cgGrid.SelectedRows.Count -eq 0) { return }
         $r      = $cgGrid.SelectedRows[0]
@@ -956,7 +987,7 @@ $ShowCollectionGroupsManager = {
     [void]$cgForm.ShowDialog($form)
 }
 
-# --- ОКНО НАСТРОЕК ИНФРАСТРУКТУРЫ (СПИСОК ФЕРМ И СЕРВЕР FSLOGIX) ---
+# --- ОКНО НАСТРОЕК ИНФРАСТРУКТУРЫ (F12) ---
 $ShowSettingsDialog = {
     $sForm = New-Object System.Windows.Forms.Form
     $sForm.Text = "Настройки инфраструктуры — Брокеры RDS и Сервер FSLogix"
@@ -1096,7 +1127,7 @@ function Set-RdsNodeDrainState([string]$brokerFqdn, [string]$rdshFqdn, [string]$
     return $applied
 }
 
-# --- МОДУЛЬ УПРАВЛЕНИЯ УЗЛАМИ СЕАНСОВ RDSH (DRAIN MODE) ---
+# --- МОДУЛЬ УПРАВЛЕНИЯ УЗЛАМИ СЕАНСОВ RDSH (F4) ---
 $ShowNodesManager = {
     if ($script:candidateBrokers.Count -eq 0) {
         & $ShowSettingsDialog
@@ -1584,7 +1615,7 @@ function Invoke-UbuntuSsh([string]$targetHost, [string]$remoteBashCmd, [System.M
     }
 }
 
-# --- ОКНО УПРАВЛЕНИЯ FSLOGIX (С ВЫБОРОМ СЕРВЕРА) ---
+# --- ОКНО УПРАВЛЕНИЯ FSLOGIX (F7) ---
 $ShowFSLogixManager = {
     $initialUser = ""
     if ($grid.SelectedRows.Count -gt 0) {
@@ -1809,7 +1840,7 @@ $ShowFSLogixManager = {
     [void]$fForm.ShowDialog($form)
 }
 
-# --- ФУНКЦИЯ ТЕНЕВОГО ПОДКЛЮЧЕНИЯ БЕЗ ЗАПРОСА ---
+# --- ФУНКЦИЯ ТЕНЕВОГО ПОДКЛЮЧЕНИЯ БЕЗ ЗАПРОСА (F2 / F3) ---
 function Start-SilentShadow([bool]$withControl) {
     if ($grid.SelectedRows.Count -eq 0) { return }
     $row        = $grid.SelectedRows[0]
@@ -1833,7 +1864,7 @@ function Start-SilentShadow([bool]$withControl) {
     Start-Process "mstsc.exe" -ArgumentList $args
 }
 
-# --- ОКНО ДИСПЕТЧЕРА ПРОЦЕССОВ СЕССИИ ---
+# --- ОКНО ДИСПЕТЧЕРА ПРОЦЕССОВ СЕССИИ (F8) ---
 $ShowUserProcesses = {
     if ($grid.SelectedRows.Count -eq 0) { return }
     $row        = $grid.SelectedRows[0]
@@ -2050,7 +2081,7 @@ $StartLoadSessions = {
     if ($script:isLoading) { return }
 
     if ($script:candidateBrokers.Count -eq 0) {
-        $lblStatus.Text = "Не задан список брокеров RDS. Нажмите '⚙ Настройки', чтобы добавить фермы."
+        $lblStatus.Text = "Не задан список брокеров RDS. Нажмите '⚙ Настройки (F12)', чтобы добавить фермы."
         $cardTotal.ValueText   = "0";     $cardTotal.Invalidate()
         $cardActive.ValueText  = "0";     $cardActive.Invalidate()
         $cardDisc.ValueText    = "0";     $cardDisc.Invalidate()
@@ -2069,10 +2100,10 @@ $StartLoadSessions = {
             $tcpF = New-Object System.Net.Sockets.TcpClient
             $arF  = $tcpF.BeginConnect($script:fslogixHost, 22, $null, $null)
             if ($arF.AsyncWaitHandle.WaitOne(150, $false)) {
-                $cardFslogix.SubText  = "● SSH/Samba ОНЛАЙН (Открыть VHDX)"
+                $cardFslogix.SubText  = "● SSH/Samba ОНЛАЙН (F7 — VHDX)"
                 $cardFslogix.SubColor = $clrAccentGreen
             } else {
-                $cardFslogix.SubText  = "○ Нет ответа SSH (Нажмите для входа)"
+                $cardFslogix.SubText  = "○ Нет ответа SSH (F7 — вход)"
                 $cardFslogix.SubColor = $clrAccentAmber
             }
             $tcpF.Close()
@@ -2080,7 +2111,7 @@ $StartLoadSessions = {
         } catch {}
     } else {
         $cardFslogix.ValueText = "Не задан"
-        $cardFslogix.SubText   = "⚙ Нажмите для указания сервера"
+        $cardFslogix.SubText   = "⚙ Нажмите F12 для настройки"
         $cardFslogix.SubColor  = $clrTextMuted
         $cardFslogix.Invalidate()
     }
@@ -2201,7 +2232,7 @@ $script:timer.Add_Tick({
     & $ApplyFilters
 })
 
-# --- ОБРАБОТЧИКИ СОБЫТИЙ ---
+# --- ОБРАБОТЧИКИ СОБЫТИЙ И ДЕЙСТВИЙ ---
 $cbBrokers.Add_SelectedIndexChanged($ApplyFilters)
 $cbState.Add_SelectedIndexChanged($ApplyFilters)
 $txtSearch.Add_TextChanged($ApplyFilters)
@@ -2260,7 +2291,7 @@ $miProcesses.Add_Click($ShowUserProcesses)
 $DoDisconnect = {
     if ($grid.SelectedRows.Count -eq 0) { return }
     $count = $grid.SelectedRows.Count
-    if ([System.Windows.Forms.MessageBox]::Show("Отключить выбранные сессии ($count шт.)?`nПрограммы пользователей останутся запущенными.", "Отключение", "YesNo", "Question") -eq "Yes") {
+    if ([System.Windows.Forms.MessageBox]::Show("Отключить выбранные сессии ($count шт.)?`nПрограммы пользователей останутся запущенными.", "Отключение (F10)", "YesNo", "Question") -eq "Yes") {
         Ensure-RDModule
         foreach ($r in $grid.SelectedRows) {
             $sessId     = [int]$r.Cells["ID"].Value
@@ -2280,7 +2311,7 @@ $miDisconnect.Add_Click($DoDisconnect)
 $DoLogoff = {
     if ($grid.SelectedRows.Count -eq 0) { return }
     $count = $grid.SelectedRows.Count
-    if ([System.Windows.Forms.MessageBox]::Show("Принудительно сбросить выбранные сессии ($count шт.)?`nНесохраненные данные будут потеряны!", "Сброс сессий", "YesNo", "Warning") -eq "Yes") {
+    if ([System.Windows.Forms.MessageBox]::Show("Принудительно сбросить выбранные сессии ($count шт.)?`nНесохраненные данные будут потеряны!", "Сброс сессий (F11)", "YesNo", "Warning") -eq "Yes") {
         Ensure-RDModule
         foreach ($r in $grid.SelectedRows) {
             $sessId     = [int]$r.Cells["ID"].Value
@@ -2305,7 +2336,7 @@ $miLogoff.Add_Click($DoLogoff)
 $DoSendMessage = {
     if ($grid.SelectedRows.Count -eq 0) { return }
     $count = $grid.SelectedRows.Count
-    $msg = [Microsoft.VisualBasic.Interaction]::InputBox("Введите текст сообщения для выбранных пользователей ($count шт.):", "Отправка сообщения", "Уважаемые коллеги, пожалуйста, сохраните работу.")
+    $msg = [Microsoft.VisualBasic.Interaction]::InputBox("Введите текст сообщения для выбранных пользователей ($count шт.):", "Отправка сообщения (F9)", "Уважаемые коллеги, пожалуйста, сохраните работу.")
     if ($msg) {
         Ensure-RDModule
         foreach ($r in $grid.SelectedRows) {
@@ -2335,7 +2366,7 @@ $miOpenC.Add_Click({
     }
 })
 
-$btnExport.Add_Click({
+$DoExportCsv = {
     if (-not $script:table -or $script:table.DefaultView.Count -eq 0) { return }
     $sfd = New-Object System.Windows.Forms.SaveFileDialog
     $sfd.Filter = "CSV файл (*.csv)|*.csv"
@@ -2348,16 +2379,64 @@ $btnExport.Add_Click({
         $lines | Set-Content -Path $sfd.FileName -Encoding UTF8
         [System.Windows.Forms.MessageBox]::Show("Отчет сохранен:`n$($sfd.FileName)", "Экспорт CSV", "OK", "Information")
     }
-})
+}
+$btnExport.Add_Click($DoExportCsv)
 
 $grid.Add_CellDoubleClick({
     param($sender, $e)
     if ($e.RowIndex -ge 0) { Start-SilentShadow $true }
 })
 
+# --- ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ДЛЯ ВСЕХ КНОПОК ВЕРХНЕГО МЕНЮ ---
 $form.Add_KeyDown({
     param($sender, $e)
-    if ($e.KeyCode -eq "F5") { & $StartLoadSessions }
+
+    # Сочетания с Ctrl
+    if ($e.Control) {
+        switch ($e.KeyCode) {
+            "F" {
+                $txtSearch.Focus()
+                $txtSearch.SelectAll()
+                $e.Handled = $true
+                $e.SuppressKeyPress = $true
+            }
+            "S" {
+                & $DoExportCsv
+                $e.Handled = $true
+                $e.SuppressKeyPress = $true
+            }
+            "E" {
+                & $DoExportCsv
+                $e.Handled = $true
+                $e.SuppressKeyPress = $true
+            }
+        }
+        return
+    }
+
+    # Функциональные клавиши F2..F12 и Escape
+    if (-not $e.Alt) {
+        switch ($e.KeyCode) {
+            "F2"  { Start-SilentShadow $true;  $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F3"  { Start-SilentShadow $false; $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F4"  { & $ShowNodesManager;       $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F5"  { & $StartLoadSessions;      $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F6"  { & $ShowCollectionGroupsManager; $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F7"  { & $ShowFSLogixManager;     $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F8"  { & $ShowUserProcesses;      $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F9"  { & $DoSendMessage;          $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F10" { & $DoDisconnect;           $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F11" { & $DoLogoff;               $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "F12" { & $ShowSettingsDialog;     $e.Handled = $true; $e.SuppressKeyPress = $true }
+            "Escape" {
+                if ($txtSearch.Focused -and $txtSearch.Text.Length -gt 0) {
+                    $txtSearch.Text = ""
+                    $e.Handled = $true
+                    $e.SuppressKeyPress = $true
+                }
+            }
+        }
+    }
 })
 
 $form.Add_FormClosing({
