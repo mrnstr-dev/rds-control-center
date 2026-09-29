@@ -499,7 +499,7 @@ if ($doubleBufferProp) { $doubleBufferProp.SetValue($grid, $true, $null) }
 
 $gridPanel.Controls.Add($grid)
 
-# --- КОНТЕКСТНОЕ МЕНЮ (ПКМ) С ПОДПИСЯМИ ГОРЯЧИХ КЛАВИШ ---
+# --- КОНТЕКСТНОЕ МЕНЮ (ПКМ) ---
 $ctxMenu = New-Object System.Windows.Forms.ContextMenuStrip
 $ctxMenu.Renderer = New-Object DarkMenuRenderer
 $ctxMenu.Font = New-Object System.Drawing.Font("Segoe UI", 9.5)
@@ -2391,7 +2391,6 @@ $grid.Add_CellDoubleClick({
 $form.Add_KeyDown({
     param($sender, $e)
 
-    # Сочетания с Ctrl
     if ($e.Control) {
         switch ($e.KeyCode) {
             "F" {
@@ -2414,7 +2413,6 @@ $form.Add_KeyDown({
         return
     }
 
-    # Функциональные клавиши F2..F12 и Escape
     if (-not $e.Alt) {
         switch ($e.KeyCode) {
             "F2"  { Start-SilentShadow $true;  $e.Handled = $true; $e.SuppressKeyPress = $true }
